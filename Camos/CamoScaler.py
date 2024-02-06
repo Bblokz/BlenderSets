@@ -21,13 +21,21 @@ def tile_image_complex(image, tile_size):
     new_size = 4096
     new_image = Image.new('RGB', (new_size, new_size))
 
-    # Randomly tile the entire 4K texture
+    # Randomly tile the entire 4K texture with random rotations
     for x in range(0, new_size, tile_size):
         for y in range(0, new_size, tile_size):
             rand_x = random.randint(0, image.width - tile_size)
             rand_y = random.randint(0, image.height - tile_size)
             tile = image.crop((rand_x, rand_y, rand_x + tile_size, rand_y + tile_size))
-            new_image.paste(tile, (x, y))
+            
+            # Randomly rotate the tile
+            rotation = random.choice([90, -90, 180])
+            rotated_tile = tile.rotate(rotation, expand=True)
+            
+            # Adjust paste position for rotated tile size differences
+            paste_x = x + (tile_size - rotated_tile.size[0]) // 2
+            paste_y = y + (tile_size - rotated_tile.size[1]) // 2
+            new_image.paste(rotated_tile, (paste_x, paste_y))
 
     return new_image
 
