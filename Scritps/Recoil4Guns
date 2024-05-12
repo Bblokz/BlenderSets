@@ -1,0 +1,63 @@
+import bpy
+
+# Base information for the action names
+armature_name = "Flak4"
+name_base = "Anim_"
+name_weapon = "Flak4_"
+
+# Recoil animation setup
+recoil_distance = 0.2  # Distance for the recoil effect
+total_frames = 60  # Total number of frames for the animation
+animation_duration = 20  # Duration of each gun's recoil animation
+
+# Timing for each gun's start
+start_frame_gun1 = 1
+start_frame_gun2 = start_frame_gun1 + 10
+start_frame_gun3 = start_frame_gun2 + 12
+start_frame_gun4 = start_frame_gun3 + 16
+
+bpy.context.view_layer.objects.active = bpy.data.objects[armature_name]
+armature = bpy.data.objects[armature_name]
+
+bpy.ops.object.mode_set(mode='POSE')
+
+action_name = name_base + name_weapon + "Recoil"
+new_action = bpy.data.actions.new(name=action_name)
+armature.animation_data_create()
+
+# Before assigning the new action, push the existing action to the NLA if there is one
+if armature.animation_data.action:
+    track = armature.animation_data.nla_tracks.new()
+    track.strips.new(armature.animation_data.action.name, 1, armature.animation_data.action)
+    armature.animation_data.action.use_fake_user = True
+
+# Assign the new action to the armature
+armature.animation_data.action = new_action
+
+# Function to animate recoil for a specific gun bone
+def animate_gun_recoil(bone_name, start_frame):
+    gun_bone = armature.pose.bones[bone_name]
+
+    # Set initial position and insert a keyframe
+    gun_bone.location = (0, 0, 0)
+    gun_bone.keyframe_insert(data_path="location", frame=start_frame)
+
+    # Set recoil position and insert a keyframe in the middle of the animation
+    mid_frame = start_frame + animation_duration // 2
+    gun_bone.location[1] -= recoil_distance
+    gun_bone.keyframe_insert(data_path="location", frame=mid_frame)
+
+    # Return to the original position and insert a keyframe at the end of the animation
+    end_frame = start_frame + animation_duration
+    gun_bone.location = (0, 0, 0)
+    gun_bone.keyframe_insert(data_path="location", frame=end_frame)
+
+# Animate each gun with specified start frames
+animate_gun_recoil('B_Gun1', start_frame_gun1)
+animate_gun_recoil('B_Gun2', start_frame_gun2)
+animate_gun_recoil('B_Gun3', start_frame_gun3)
+animate_gun_recoil('B_Gun4', start_frame_gun4)
+
+bpy.ops.object.mode_set(mode='OBJECT')
+
+print("All specified recoil animations have been created and saved to NLA.")
