@@ -1,17 +1,16 @@
 import bpy
 
-armature_name = "PantherTracks"
+armature_name = "Tracks"
 name_base = "Anim_Tracks_"
-name_vehicle = "PantherG_"
+name_vehicle = "PZ38_T_"
 
 # Array of animations, each elements will generate one animation with elm = ("suffix", #DegreesLeftWheelsTurn, #DegreesRightWheelsTurn)
 # 720 degrees = 2*360 with 72 frames correlates to one full wheel turn / 30 FPS 
 # So, 720 versus 360 allows for the left wheels to move twice as fast as the right ones.
 animations = [
     ("FastFWD", 720, 720),
-    ("SlowFWD", 360, 360),
     ("FastBWD", -720, -720),
-    ("SlowBWD", -360, -360),
+    ("TPose", 0, 0),
     ("TurnStationaryLeft", -360, 720),
     ("TurnStationaryRight", 720, -360),
     ("TurnLeft", 360, 720),
