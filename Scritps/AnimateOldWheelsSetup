@@ -1,0 +1,127 @@
+import bpy
+
+# -------------------------------------------------------------------
+# User Settings
+# -------------------------------------------------------------------
+armature_name = "Armature"  # The name of your armature object
+name_base = "Anim_Wheels_"
+name_vehicle = "Opel_"
+
+# 720 degrees over 72 frames = 2 full spins at 30FPS
+# 360 degrees over 72 frames = 1 full spin at 30FPS
+# Steering angles are in degrees; we’ll convert to radians later.
+# Format: (suffix, wheel_spin_degrees, front_wheel_steer_degrees)
+animations = [
+    ("FWD",                720,    0),   # Full forward spin, no steering
+    ("BWD",               -720,    0),   # Full backward spin, no steering
+    ("TPose",               0,     0),   # No spin, no steering
+    ("TurnStationaryLeft", 360,   45),   # Half speed spin, +45° steering (left)
+    ("TurnStationaryRight",360,  -45),   # Half speed spin, -45° steering (right)
+    ("TurnLeft",           720,   30),   # Full spin, +30° steering (left)
+    ("TurnRight",          720,  -30),   # Full spin, -30° steering (right)
+    ("BackwardsTurnLeft", -720,   30),   # Backward spin, +30° steering
+    ("BackwardsTurnRight",-720,  -30)    # Backward spin, -30° steering
+]
+
+frame_start = 1
+frame_end = 72
+
+# Conversion factor from degrees to radians
+deg_to_rad = 0.0174533
+
+# -------------------------------------------------------------------
+# Helper: Identify wheel bones in the old naming scheme
+# -------------------------------------------------------------------
+def identify_wheels_old_naming(armature_obj):
+    """
+    Returns two things:
+      all_wheels   : list of bone names that are recognized as wheels (FL, FR, RL, RR)
+      front_wheels : set of bone names that are front wheels (FL, FR) for steering
+    """
+    # We'll treat only bones named exactly 'FL', 'FR', 'RL', 'RR' as wheels
+    pose_bones = armature_obj.pose.bones
+
+    # Collect these specific wheel bones
+    old_wheel_names = {"FL", "FR", "RL", "RR"}
+    all_wheels = [bone.name for bone in pose_bones if bone.name in old_wheel_names]
+    
+    # For these older 4‐wheeled vehicles, the front wheels are FL, FR
+    front_wheels = {"FL", "FR"}
+    
+    return all_wheels, front_wheels
+
+# -------------------------------------------------------------------
+# Main: Create the animations
+# -------------------------------------------------------------------
+def create_wheel_animations_old_naming():
+    # Ensure the specified armature object exists
+    if armature_name not in bpy.data.objects:
+        print(f"Armature '{armature_name}' not found in the scene.")
+        return
+
+    armature = bpy.data.objects[armature_name]
+    bpy.context.view_layer.objects.active = armature
+    
+    # Identify wheel bones for the old naming scheme
+    all_wheels, front_wheels = identify_wheels_old_naming(armature)
+    print("All wheel bones:", all_wheels)
+    print("Front wheel bones:", front_wheels)
+
+    # Generate each animation
+    for (anim_suffix, spin_deg, steer_deg) in animations:
+        action_name = name_base + name_vehicle + anim_suffix
+        
+        # Switch to Pose mode
+        bpy.ops.object.mode_set(mode='POSE')
+        
+        # Create a new Action
+        new_action = bpy.data.actions.new(name=action_name)
+        armature.animation_data_create()
+
+        # If there's an existing action on the armature, push it to NLA
+        if armature.animation_data.action:
+            track = armature.animation_data.nla_tracks.new()
+            old_action = armature.animation_data.action
+            track.strips.new(old_action.name, frame_start, old_action)
+            old_action.use_fake_user = True
+        
+        # Assign the new action
+        armature.animation_data.action = new_action
+        
+        # Keyframe each recognized wheel bone
+        for bone in armature.pose.bones:
+            # Only modify FL, FR, RL, RR
+            if bone.name in all_wheels:
+                bone.rotation_mode = 'XYZ'
+                
+                # Convert degrees to radians
+                spin_rad = spin_deg * deg_to_rad
+                # Steering applies only to front wheels
+                final_steer_deg = steer_deg if bone.name in front_wheels else 0.0
+                steer_rad = final_steer_deg * deg_to_rad
+                
+                # Steering (Z) is full from the start
+                # Rolling spin (Y) goes from 0 at frame_start to spin_rad at frame_end
+                bone.rotation_euler = (0.0, 0.0, steer_rad)
+                bone.keyframe_insert(data_path="rotation_euler", frame=frame_start)
+                
+                bone.rotation_euler = (0.0, spin_rad, steer_rad)
+                bone.keyframe_insert(data_path="rotation_euler", frame=frame_end)
+
+        # Make all FCurves linear interpolation
+        for fcurve in new_action.fcurves:
+            for kp in fcurve.keyframe_points:
+                kp.interpolation = 'LINEAR'
+
+        # Switch back to Object Mode
+        bpy.ops.object.mode_set(mode='OBJECT')
+        
+        print(f"Created animation: {action_name}")
+
+    print("All specified old‐naming wheeled animations have been created.")
+
+# -------------------------------------------------------------------
+# Run the script
+# -------------------------------------------------------------------
+if __name__ == "__main__":
+    create_wheel_animations_old_naming()
