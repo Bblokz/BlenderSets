@@ -1,0 +1,78 @@
+import bpy
+import math
+
+# ---------------- user-adjustable settings ----------------
+
+# Rotation speeds, in rotations per second
+slow_speed_rps = 0.5   # slow variant
+fast_speed_rps = 2.0   # fast variant
+
+# Duration of each animation (in seconds)
+duration_seconds = 5.0
+
+# -----------------------------------------------------------
+
+# Calculate frame range based on scene framerate
+scene = bpy.context.scene
+fps = scene.render.fps / scene.render.fps_base
+total_frames = int(duration_seconds * fps)
+frame_start = 1
+frame_end = frame_start + total_frames
+
+# Define the four animations: (name_suffix, number_of_rotations)
+animations = [
+    ("Slow_CW",  -slow_speed_rps * duration_seconds),
+    ("Fast_CW",  -fast_speed_rps * duration_seconds),
+    ("Slow_CCW",  slow_speed_rps * duration_seconds),
+    ("Fast_CCW",  fast_speed_rps * duration_seconds),
+]
+
+# Get the selected armature
+arm = bpy.context.view_layer.objects.active
+if not arm or arm.type != 'ARMATURE':
+    raise Exception("Please select an armature object before running this script.")
+
+# Ensure we’re operating on that armature
+bpy.context.view_layer.objects.active = arm
+
+for suffix, rot_count in animations:
+    action_name = f"Anim_WingRotor_{suffix}"
+    # Switch into Pose Mode
+    bpy.ops.object.mode_set(mode='POSE')
+
+    # Create new action
+    new_action = bpy.data.actions.new(name=action_name)
+    if not arm.animation_data:
+        arm.animation_data_create()
+
+    # Push any existing action into the NLA (to keep it)
+    if arm.animation_data.action:
+        track = arm.animation_data.nla_tracks.new()
+        track.strips.new(arm.animation_data.action.name, frame_start, arm.animation_data.action)
+        arm.animation_data.action.use_fake_user = True
+
+    # Assign our new action
+    arm.animation_data.action = new_action
+
+    # Animate each rotor bone
+    for pb in arm.pose.bones:
+        if pb.name.startswith("B_WingRotor_R") or pb.name.startswith("B_WingRotor_L"):
+            pb.rotation_mode = 'XYZ'
+            # Initial keyframe at zero rotation
+            pb.rotation_euler = (0.0, 0.0, 0.0)
+            pb.keyframe_insert(data_path="rotation_euler", frame=frame_start)
+            # Final rotation around Z (blade‐spin axis)
+            final_deg = rot_count * 360.0
+            final_rad = math.radians(final_deg)
+            pb.rotation_euler = (0.0, 0.0, final_rad)
+            pb.keyframe_insert(data_path="rotation_euler", frame=frame_end)
+
+    # Make all keyframes linear
+    for fc in new_action.fcurves:
+        for kp in fc.keyframe_points:
+            kp.interpolation = 'LINEAR'
+
+    # Return to Object Mode before next action
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+print("✔ Wing rotor animations created: Slow/ Fast × CW/ CCW.")```
