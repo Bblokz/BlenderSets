@@ -80,12 +80,29 @@ for name, horiz_deg, vert_deg, speed_rps in flight_anims:
             pb.rotation_euler = (0.0, 0.0, 0.0)
             pb.keyframe_insert(data_path="rotation_euler", frame=frame_start)
             # end
-            pb.rotation_euler = (0.0, 0.0, rot_rad)
+            pb.rotation_euler = (rot_rad, 0.0, 0.0)
             pb.keyframe_insert(data_path="rotation_euler", frame=frame_end)
 
-        # 2) Horizontal stabilizers: rotate around local Y (unchanged)
-        elif pb.name in {"B_HorizontalStabilizer_L", "B_HorizontalStabilizer_R"}:
-            angle_h = math.radians(horiz_deg)
+        # 2) Horizontal stabilizers: rotate around local Y
+        elif pb.name.startswith("B_HorizontalStabilizer_L") or pb.name.startswith("B_HorizontalStabilizer_R"):
+            # banking special‑case
+            if name == "Bank_Left":
+                # left up (+30°), right down (‑30°)
+                if pb.name.startswith("B_HorizontalStabilizer_L"):
+                    angle_h = math.radians(30.0)
+                else:
+                    angle_h = math.radians(-30.0)
+            elif name == "Bank_Right":
+                # right up (+30°), left down (‑30°)
+                if pb.name.startswith("B_HorizontalStabilizer_R"):
+                    angle_h = math.radians(30.0)
+                else:
+                    angle_h = math.radians(-30.0)
+            else:
+                # default pitch for dive/climb/straight
+                angle_h = math.radians(horiz_deg)
+
+            # insert keyframes
             pb.rotation_euler = (0.0, angle_h, 0.0)
             pb.keyframe_insert(data_path="rotation_euler", frame=frame_start)
             pb.keyframe_insert(data_path="rotation_euler", frame=frame_end)
@@ -93,7 +110,7 @@ for name, horiz_deg, vert_deg, speed_rps in flight_anims:
         # 3) Vertical stabilizer: rotate around local Z
         elif pb.name.startswith("B_VerticalStabilizer1"):
             angle_v = math.radians(vert_deg)
-            pb.rotation_euler = (0.0, 0.0,angle_v )
+            pb.rotation_euler = (0.0, 0.0, angle_v)
             pb.keyframe_insert(data_path="rotation_euler", frame=frame_start)
             pb.keyframe_insert(data_path="rotation_euler", frame=frame_end)
 

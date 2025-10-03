@@ -71,7 +71,7 @@ for name, rot_count in animations:
             pb.keyframe_insert(data_path="rotation_euler", frame=frame_start)
             # Final rotation around Z (blade‑spin axis)
             final_rad = math.radians(rot_count * 360.0)
-            pb.rotation_euler = (0.0, 0.0, final_rad)
+            pb.rotation_euler = (0.0, final_rad, 0.0)
             pb.keyframe_insert(data_path="rotation_euler", frame=frame_end)
 
     # Make all keyframes linear
