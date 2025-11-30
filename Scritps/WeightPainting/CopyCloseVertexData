@@ -1,0 +1,165 @@
+import bpy
+from mathutils import kdtree
+
+# ================================
+# Settings
+# ================================
+
+# Below this value, weights are considered "zero"/negligible
+WEIGHT_THRESHOLD = 1e-4
+
+# If True, existing groups on "bad" vertices are cleared
+# before copying from the nearest valid vertex
+CLEAR_EXISTING_GROUPS = True
+
+
+# ================================
+# Helper Functions
+# ================================
+
+def get_vertex_weights(obj, vert_index):
+    """
+    Returns a list of (group_index, weight) for the given vertex.
+    """
+    vertex = obj.data.vertices[vert_index]
+    result = []
+    for group_element in vertex.groups:
+        group_index = group_element.group
+        weight = group_element.weight
+        result.append((group_index, weight))
+    return result
+
+
+def is_unweighted_vertex(obj, vert_index, weight_threshold):
+    """
+    Returns True if the vertex has no groups OR
+    all weights are below the given threshold.
+    """
+    vertex = obj.data.vertices[vert_index]
+    if not vertex.groups:
+        return True
+
+    max_weight = 0.0
+    for group_element in vertex.groups:
+        if group_element.weight > max_weight:
+            max_weight = group_element.weight
+
+    return max_weight < weight_threshold
+
+
+def build_kdtree_for_valid_vertices(obj, weight_threshold):
+    """
+    Builds a KD-Tree with all vertices that have
+    at least one weight >= threshold.
+    Returns (kdtree, valid_indices, weights_by_vert).
+    - valid_indices: list mapping KD index -> vertex index.
+    - weights_by_vert: dict[vert_index] = list[(group_index, weight)].
+    """
+    mesh = obj.data
+    num_vertices = len(mesh.vertices)
+
+    # Collect valid vertices and their weights first
+    valid_vert_indices = []
+    weights_by_vert = {}
+
+    for v_index in range(num_vertices):
+        if not is_unweighted_vertex(obj, v_index, weight_threshold):
+            valid_vert_indices.append(v_index)
+            weights_by_vert[v_index] = get_vertex_weights(obj, v_index)
+
+    if not valid_vert_indices:
+        return None, [], {}
+
+    # Build KD-Tree
+    kd = kdtree.KDTree(len(valid_vert_indices))
+    for kd_index, v_index in enumerate(valid_vert_indices):
+        co = mesh.vertices[v_index].co
+        kd.insert(co, kd_index)
+    kd.balance()
+
+    return kd, valid_vert_indices, weights_by_vert
+
+
+def copy_weights_from_vertex(obj, source_vert_index, target_vert_index,
+                             weights_by_vert, clear_existing_groups=True):
+    """
+    Copies all vertex-group weights from source_vert_index to target_vert_index.
+    Optionally clears existing groups on target before copying.
+    """
+    mesh = obj.data
+    vertex_groups = obj.vertex_groups
+
+    source_weights = weights_by_vert.get(source_vert_index, [])
+    target_vertex = mesh.vertices[target_vert_index]
+
+    if clear_existing_groups and target_vertex.groups:
+        # Remove all existing groups from target vertex
+        # (we copy fresh from source)
+        for group_element in list(target_vertex.groups):
+            group = vertex_groups[group_element.group]
+            group.remove([target_vert_index])
+
+    # Apply source weights to target
+    for group_index, weight in source_weights:
+        group = vertex_groups[group_index]
+        group.add([target_vert_index], weight, 'REPLACE')
+
+
+# ================================
+# Main Operation
+# ================================
+
+def main():
+    obj = bpy.context.active_object
+
+    if obj is None or obj.type != 'MESH':
+        print("Error: Active object is not a mesh.")
+        return
+
+    # Ensure we're in Object Mode for safe data access
+    if bpy.context.mode != 'OBJECT':
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+    mesh = obj.data
+    num_vertices = len(mesh.vertices)
+
+    # Build KD-Tree of valid vertices
+    kd, valid_vert_indices, weights_by_vert = build_kdtree_for_valid_vertices(
+        obj, WEIGHT_THRESHOLD
+    )
+
+    if kd is None or not valid_vert_indices:
+        print("No vertices with sufficient weight found; nothing to copy from.")
+        return
+
+    num_fixed = 0
+    num_unweighted = 0
+
+    for v_index in range(num_vertices):
+        if is_unweighted_vertex(obj, v_index, WEIGHT_THRESHOLD):
+            num_unweighted += 1
+            v_co = mesh.vertices[v_index].co
+
+            # Find nearest valid vertex via KD-Tree
+            nearest_co, nearest_kd_index, _dist = kd.find(v_co)
+            source_vert_index = valid_vert_indices[nearest_kd_index]
+
+            copy_weights_from_vertex(
+                obj=obj,
+                source_vert_index=source_vert_index,
+                target_vert_index=v_index,
+                weights_by_vert=weights_by_vert,
+                clear_existing_groups=CLEAR_EXISTING_GROUPS
+            )
+
+            num_fixed += 1
+
+    print("=== Weight Copy Finished ===")
+    print(f"Total vertices:             {num_vertices}")
+    print(f"Unweighted (or near-zero):  {num_unweighted}")
+    print(f"Vertices fixed:             {num_fixed}")
+
+
+# Run
+if __name__ == "__main__":
+    main()
